@@ -2,7 +2,7 @@ name: Product Owner - Research & Planning
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 * * * *'
   workflow_dispatch:
     inputs:
       focus_area:
@@ -17,11 +17,12 @@ jobs:
     permissions:
       contents: read
       issues: write
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 1
+          fetch-depth: 0
 
       - name: Check daily limits
         id: limits
