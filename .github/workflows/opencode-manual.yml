@@ -75,6 +75,7 @@ jobs:
         uses: anomalyco/opencode/github@latest
         env:
           OPENCODE_CONFIG_CONTENT: ${{ steps.config.outputs.config }}
+          VOLCES_ARK_API_KEY: ${{ secrets.VOLCES_ARK_API_KEY }}
           CUSTOM_OPENAI_API_KEY: ${{ secrets.CUSTOM_OPENAI_API_KEY }}
           CUSTOM_ANTHROPIC_API_KEY: ${{ secrets.CUSTOM_ANTHROPIC_API_KEY }}
           MANUAL_ENDPOINT_API_KEY: ${{ secrets.MANUAL_ENDPOINT_API_KEY }}
