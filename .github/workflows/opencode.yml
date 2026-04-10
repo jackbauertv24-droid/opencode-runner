@@ -13,22 +13,27 @@ jobs:
       contains(github.event.comment.body, '/opencode')
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
-      pull-requests: read
       issues: read
+      pull-requests: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          persist-credentials: false
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add OpenCode to PATH
+        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+
+      - name: Extract prompt from comment
+        id: prompt
+        run: |
+          COMMENT="${{ github.event.comment.body }}"
+          PROMPT=$(echo "$COMMENT" | sed -E 's|/oc(ode)?[[:space:]]*||' | sed 's|/opencode[[:space:]]*||')
+          echo "prompt=$PROMPT" >> $GITHUB_OUTPUT
 
       - name: Run OpenCode
-        uses: anomalyco/opencode/github@latest
+        run: opencode run "${{ steps.prompt.outputs.prompt }}"
         env:
           VOLCES_ARK_API_KEY: ${{ secrets.VOLCES_ARK_API_KEY }}
-        with:
-          model: ${{ vars.DEFAULT_MODEL || 'volces-ark/ark-code-latest' }}
-          agent: ${{ vars.DEFAULT_AGENT || 'build' }}
-          share: true

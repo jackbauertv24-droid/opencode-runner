@@ -8,28 +8,23 @@ jobs:
   review:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
       pull-requests: read
-      issues: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          persist-credentials: false
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add OpenCode to PATH
+        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
       - name: Run OpenCode Review
-        uses: anomalyco/opencode/github@latest
+        run: |
+          opencode run "Review this pull request:
+          - Check for code quality issues
+          - Look for potential bugs
+          - Suggest improvements"
         env:
           VOLCES_ARK_API_KEY: ${{ secrets.VOLCES_ARK_API_KEY }}
-        with:
-          model: ${{ vars.DEFAULT_MODEL || 'volces-ark/ark-code-latest' }}
-          prompt: |
-            Review this pull request:
-            - Check for code quality issues
-            - Look for potential bugs
-            - Suggest improvements
-            - Verify tests are adequate
-          agent: ${{ vars.DEFAULT_AGENT || 'build' }}
-          share: true

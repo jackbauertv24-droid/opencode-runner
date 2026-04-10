@@ -9,7 +9,7 @@ on:
   workflow_dispatch:
     inputs:
       prompt:
-        description: 'Task to execute (overrides default)'
+        description: 'Task to execute'
         required: false
         type: string
         default: ''
@@ -18,23 +18,19 @@ jobs:
   opencode:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
-      contents: write
-      pull-requests: write
-      issues: write
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          persist-credentials: false
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add OpenCode to PATH
+        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
       - name: Run OpenCode
-        uses: anomalyco/opencode/github@latest
+        run: |
+          opencode run "${{ inputs.prompt || 'Analyze the recent changes and verify code quality' }}"
         env:
           VOLCES_ARK_API_KEY: ${{ secrets.VOLCES_ARK_API_KEY }}
-        with:
-          model: ${{ vars.DEFAULT_MODEL || 'volces-ark/ark-code-latest' }}
-          prompt: ${{ inputs.prompt || 'Analyze the recent changes and verify code quality. Check for any potential issues or improvements.' }}
-          agent: ${{ vars.DEFAULT_AGENT || 'build' }}
-          share: true

@@ -11,7 +11,7 @@ on:
         description: 'Model to use (format: provider/model)'
         required: false
         type: string
-        default: ''
+        default: 'volces-ark/ark-code-latest'
       agent:
         description: 'Agent to use (build or plan)'
         required: false
@@ -25,23 +25,18 @@ jobs:
   opencode:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
-      contents: write
-      pull-requests: write
-      issues: write
+      contents: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
-          persist-credentials: false
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add OpenCode to PATH
+        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
       - name: Run OpenCode
-        uses: anomalyco/opencode/github@latest
+        run: opencode run "${{ inputs.prompt }}" --model "${{ inputs.model }}"
         env:
           VOLCES_ARK_API_KEY: ${{ secrets.VOLCES_ARK_API_KEY }}
-        with:
-          model: ${{ inputs.model || 'volces-ark/ark-code-latest' }}
-          prompt: ${{ inputs.prompt }}
-          agent: ${{ inputs.agent }}
-          share: true
