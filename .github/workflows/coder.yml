@@ -108,9 +108,7 @@ jobs:
         if: steps.find-issue.outputs.found == 'true'
         run: |
           git add project/
-          git commit -m "feat: implement issue #${{ steps.find-issue.outputs.number }}
-
-${{ steps.issue.outputs.title }}" || echo "No changes to commit"
+          git commit -m "feat: implement issue #${{ steps.find-issue.outputs.number }} - ${{ steps.issue.outputs.title }}" || echo "No changes to commit"
           git push origin feature/issue-${{ steps.find-issue.outputs.number }} || echo "Nothing to push"
 
       - name: Create PR
