@@ -1,0 +1,38 @@
+name: opencode-pr
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+      issues: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Run OpenCode Review
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_CONFIG_CONTENT: ${{ secrets.OPENCODE_CONFIG }}
+          CUSTOM_OPENAI_API_KEY: ${{ secrets.CUSTOM_OPENAI_API_KEY }}
+          CUSTOM_ANTHROPIC_API_KEY: ${{ secrets.CUSTOM_ANTHROPIC_API_KEY }}
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: ${{ vars.DEFAULT_MODEL || 'custom-provider/model-name' }}
+          prompt: |
+            Review this pull request:
+            - Check for code quality issues
+            - Look for potential bugs
+            - Suggest improvements
+            - Verify tests are adequate
+          agent: ${{ vars.DEFAULT_AGENT || 'build' }}
+          share: true
