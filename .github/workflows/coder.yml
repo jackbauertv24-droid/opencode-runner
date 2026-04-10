@@ -105,14 +105,15 @@ jobs:
       - name: Validate changes in project/ only
         id: validate
         run: |
-          CHANGED_FILES=$(git diff --name-only HEAD -- project/)
+          git fetch origin master
+          CHANGED_FILES=$(git diff --name-only origin/master -- project/)
           if [[ -z "$CHANGED_FILES" ]]; then
             echo "::warning::No changes made in project/"
             echo "has_changes=false" >> $GITHUB_OUTPUT
             exit 0
           fi
           
-          for file in $(git diff --name-only HEAD); do
+          for file in $(git diff --name-only origin/master); do
             if [[ ! "$file" =~ ^project/ ]]; then
               echo "::error::Violation: $file is outside project/"
               git checkout .
