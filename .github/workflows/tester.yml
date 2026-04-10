@@ -98,6 +98,7 @@ jobs:
         if: steps.find-pr.outputs.found == 'true'
         id: review
         working-directory: ./project
+        timeout-minutes: 5
         run: |
           PROMPT=$(cat ../.github/agent-prompts/tester.md | \
             sed "s/{{ pr_title }}/${{ steps.pr.outputs.title }}/g" | \
