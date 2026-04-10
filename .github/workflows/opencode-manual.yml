@@ -14,8 +14,6 @@ on:
         options:
           - 'volcengine-ark/ark-code-latest'
           - 'baidu-qianfan/qianfan-code-latest'
-          - 'alibaba-coding-plan-cn/glm-5'
-          - 'alibaba-coding-plan-cn/qwen3-coder-plus'
           - 'tencent-coding-plan/glm-5'
         default: 'volcengine-ark/ark-code-latest'
 
@@ -39,5 +37,4 @@ jobs:
         env:
           VOLCENGINE_ARK_API_KEY: ${{ secrets.VOLCENGINE_ARK_API_KEY }}
           BAIDU_QIANFAN_API_KEY: ${{ secrets.BAIDU_QIANFAN_API_KEY }}
-          ALIBABA_CODING_PLAN_CN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_CN_API_KEY }}
           TENCENT_CODING_PLAN_API_KEY: ${{ secrets.TENCENT_CODING_PLAN_API_KEY }}
