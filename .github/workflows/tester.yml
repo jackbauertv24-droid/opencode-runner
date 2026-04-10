@@ -83,6 +83,8 @@ jobs:
           echo "size=$SIZE" >> $GITHUB_OUTPUT
           echo "auto=$AUTO" >> $GITHUB_OUTPUT
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Install OpenCode
         if: steps.find-pr.outputs.found == 'true'
