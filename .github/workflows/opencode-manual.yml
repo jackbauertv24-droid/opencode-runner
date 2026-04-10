@@ -14,6 +14,10 @@ on:
         options:
           - 'volcengine-ark/ark-code-latest'
           - 'baidu-qianfan/qianfan-code-latest'
+          - 'groq/llama-3.3-70b-versatile'
+          - 'nvidia/meta/llama-3.1-8b-instruct'
+          - 'alibaba-coding-plan-cn/qwen-coder-plus-latest'
+          - 'tencent-coding-plan/hunyuan-coding-latest'
         default: 'volcengine-ark/ark-code-latest'
 
 jobs:
@@ -36,3 +40,7 @@ jobs:
         env:
           VOLCENGINE_ARK_API_KEY: ${{ secrets.VOLCENGINE_ARK_API_KEY }}
           BAIDU_QIANFAN_API_KEY: ${{ secrets.BAIDU_QIANFAN_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          NVIDIA_API_KEY: ${{ secrets.NVIDIA_API_KEY }}
+          ALIBABA_CODING_PLAN_CN_API_KEY: ${{ secrets.ALIBABA_CODING_PLAN_CN_API_KEY }}
+          TENCENT_CODING_PLAN_API_KEY: ${{ secrets.TENCENT_CODING_PLAN_API_KEY }}
