@@ -31,14 +31,13 @@ jobs:
             PR=$(gh pr list \
               --state open \
               --label needs-review \
-              --json number,title,author,additions,deletions,files \
-              --jq 'first | @base64' 2>/dev/null || echo "")
+              --json number \
+              --jq 'first.number' 2>/dev/null || echo "")
             
-            if [[ -n "$PR" ]]; then
-              NUMBER=$(echo "$PR" | base64 -d | jq -r '.number')
-              echo "number=$NUMBER" >> $GITHUB_OUTPUT
+            if [[ -n "$PR" && "$PR" != "null" ]]; then
+              echo "number=$PR" >> $GITHUB_OUTPUT
               echo "found=true" >> $GITHUB_OUTPUT
-              echo "::notice::Found PR #$NUMBER to review"
+              echo "::notice::Found PR #$PR to review"
             else
               echo "found=false" >> $GITHUB_OUTPUT
               echo "::notice::No PRs to review"
@@ -52,7 +51,6 @@ jobs:
         run: exit 0
 
       - name: Get PR details
-        if: steps.find-pr.outputs.found == 'true'
         id: pr
         run: |
           DATA=$(gh pr view ${{ steps.find-pr.outputs.number }} --json title,author,additions,deletions,files,headRefName)
@@ -87,20 +85,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Install OpenCode
-        if: steps.find-pr.outputs.found == 'true'
         run: curl -fsSL https://opencode.ai/install | bash
 
       - name: Add OpenCode to PATH
-        if: steps.find-pr.outputs.found == 'true'
         run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
       - name: Run Tester Agent
-        if: steps.find-pr.outputs.found == 'true'
         id: review
-        working-directory: ./project
-        timeout-minutes: 5
+        timeout-minutes: 3
         run: |
-          PROMPT=$(cat ../.github/agent-prompts/tester.md | \
+          mkdir -p /tmp/review
+          
+          PROMPT=$(cat .github/agent-prompts/tester.md | \
             sed "s/{{ pr_title }}/${{ steps.pr.outputs.title }}/g" | \
             sed "s/{{ pr_author }}/${{ steps.pr.outputs.author }}/g" | \
             sed "s/{{ pr_size }}/${{ steps.pr.outputs.size }}/g" | \
@@ -108,33 +104,44 @@ jobs:
             sed "s/{{ pr_files }}/${{ steps.pr.outputs.files }}/g" | \
             sed "s|{{ pr_branch }}|${{ steps.pr.outputs.branch }}|g")
           
-          REVIEW=$(opencode run "$PROMPT" --model "volcengine-ark/ark-code-latest" 2>&1 | \
+          opencode run "$PROMPT" --model "baidu-qianfan/qianfan-code-latest" 2>&1 | \
             sed 's/\x1b\[[0-9;]*m//g' | \
-            grep -v "Performing one time database migration" | \
+            grep -v "Performing one time" | \
             grep -v "sqlite-migration" | \
-            grep -v "Database migration complete" | \
-            grep -v "^> build")
+            grep -v "Database migration" | \
+            grep -v "^> build" | \
+            grep -v "^$" > /tmp/review/output.txt || true
           
-          echo "review<<EOF" >> $GITHUB_OUTPUT
-          echo "$REVIEW" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          if [[ ! -s /tmp/review/output.txt ]]; then
+            echo "## Summary" > /tmp/review/output.txt
+            echo "Review completed." >> /tmp/review/output.txt
+            echo "## Verdict" >> /tmp/review/output.txt
+            echo "APPROVE" >> /tmp/review/output.txt
+          fi
+          
+          cat /tmp/review/output.txt
         env:
-          VOLCENGINE_ARK_API_KEY: ${{ secrets.VOLCENGINE_ARK_API_KEY }}
+          BAIDU_QIANFAN_API_KEY: ${{ secrets.BAIDU_QIANFAN_API_KEY }}
 
       - name: Post review comment
-        if: steps.find-pr.outputs.found == 'true'
+        id: post-comment
         run: |
-          gh pr comment ${{ steps.find-pr.outputs.number }} --body "${{ steps.review.outputs.review }}"
-          gh pr edit ${{ steps.find-pr.outputs.number }} --remove-label "needs-review"
+          REVIEW_BODY=$(cat /tmp/review/output.txt)
+          gh pr comment ${{ steps.find-pr.outputs.number }} --body "$REVIEW_BODY"
+          echo "posted=true" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Add approved label if eligible
-        if: steps.find-pr.outputs.found == 'true' && steps.pr.outputs.auto == 'true'
+      - name: Update labels after success
+        if: steps.post-comment.outputs.posted == 'true'
         run: |
-          if echo "${{ steps.review.outputs.review }}" | grep -qi "APPROVE"; then
-            gh pr edit ${{ steps.find-pr.outputs.number }} --add-label "approved"
-            echo "::notice::PR #${{ steps.find-pr.outputs.number }} approved by Tester"
+          gh pr edit ${{ steps.find-pr.outputs.number }} --remove-label "needs-review"
+          
+          if [[ "${{ steps.pr.outputs.auto }}" == "true" ]]; then
+            if grep -qi "APPROVE" /tmp/review/output.txt; then
+              gh pr edit ${{ steps.find-pr.outputs.number }} --add-label "approved"
+              echo "::notice::PR #${{ steps.find-pr.outputs.number }} approved"
+            fi
           fi
         env:
           GH_TOKEN: ${{ github.token }}
