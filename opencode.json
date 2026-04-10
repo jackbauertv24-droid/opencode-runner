@@ -5,7 +5,8 @@
       "npm": "@ai-sdk/openai-compatible",
       "name": "Volces Ark Coding",
       "options": {
-        "baseURL": "https://ark.cn-beijing.volces.com/api/coding/v3"
+        "baseURL": "https://ark.cn-beijing.volces.com/api/coding/v3",
+        "apiKey": "{env:VOLCES_ARK_API_KEY}"
       },
       "models": {
         "ark-code-latest": {
