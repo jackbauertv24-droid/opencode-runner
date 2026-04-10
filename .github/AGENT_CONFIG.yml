@@ -1,0 +1,45 @@
+agents:
+  product-owner:
+    model: volcengine-ark/ark-code-latest
+    schedule: "0 9 * * *"
+    max_issues_per_day: 5
+    max_issues_per_run: 2
+    working_directory: project/
+    
+  coder:
+    model: tencent-coding-plan/glm-5
+    trigger: issue
+    max_prs_per_day: 10
+    max_lines_per_pr: 500
+    working_directory: project/
+    
+  tester:
+    model: baidu-qianfan/qianfan-code-latest
+    trigger: pull_request
+    working_directory: project/
+    auto_approve_threshold:
+      lines: 50
+      files: 5
+
+safeguards:
+  enabled: true
+  owner_only: true
+  allowed_actors:
+    - jackbauertv24-droid
+  
+  rate_limits:
+    issues_per_day: 5
+    prs_per_day: 10
+  
+  path_restrictions:
+    allowed_prefixes:
+      - project/
+    forbidden_paths:
+      - .github/
+      - opencode.json
+      - README.md
+
+  human_approval:
+    required_for:
+      - "P1-critical"
+      - "PRs > 200 lines"

@@ -1,0 +1,135 @@
+name: Tester - Review & Test
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  analyze:
+    if: github.actor == 'jackbauertv24-droid' || github.actor == 'AI Coder'
+    runs-on: ubuntu-latest
+    outputs:
+      size: ${{ steps.calc.outputs.size }}
+      auto_approve: ${{ steps.calc.outputs.auto }}
+      lines: ${{ steps.calc.outputs.lines }}
+      files: ${{ steps.calc.outputs.files }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Calculate PR size
+        id: calc
+        run: |
+          PR_DATA=$(gh pr view ${{ github.event.pull_request.number }} --json additions,deletions,files)
+          
+          ADDITIONS=$(echo "$PR_DATA" | jq -r '.additions')
+          DELETIONS=$(echo "$PR_DATA" | jq -r '.deletions')
+          FILES=$(echo "$PR_DATA" | jq -r '.files | length')
+          LINES=$((ADDITIONS + DELETIONS))
+          
+          echo "lines=$LINES" >> $GITHUB_OUTPUT
+          echo "files=$FILES" >> $GITHUB_OUTPUT
+          
+          if [[ $LINES -lt 50 && $FILES -lt 5 ]]; then
+            echo "size=small" >> $GITHUB_OUTPUT
+            echo "auto=true" >> $GITHUB_OUTPUT
+          elif [[ $LINES -lt 200 && $FILES -lt 10 ]]; then
+            echo "size=medium" >> $GITHUB_OUTPUT
+            echo "auto=false" >> $GITHUB_OUTPUT
+          else
+            echo "size=large" >> $GITHUB_OUTPUT
+            echo "auto=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Summary
+        run: |
+          echo "## PR Analysis" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Size**: ${{ steps.calc.outputs.size }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Lines**: ${{ steps.calc.outputs.lines }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Files**: ${{ steps.calc.outputs.files }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Auto-approve eligible**: ${{ steps.calc.outputs.auto }}" >> $GITHUB_STEP_SUMMARY
+
+  review:
+    needs: analyze
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install OpenCode
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add OpenCode to PATH
+        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+
+      - name: Load Tester prompt
+        id: prompt
+        run: |
+          PROMPT=$(cat .github/agent-prompts/tester.md)
+          PROMPT="${PROMPT//'{{ pr_title }}'/'${{ github.event.pull_request.title }}'}"
+          PROMPT="${PROMPT//'{{ pr_author }}'/'${{ github.event.pull_request.user.login }}'}"
+          PROMPT="${PROMPT//'{{ pr_size }}'/'${{ needs.analyze.outputs.size }}'}"
+          PROMPT="${PROMPT//'{{ pr_lines }}'/'${{ needs.analyze.outputs.lines }}'}"
+          PROMPT="${PROMPT//'{{ pr_files }}'/'${{ needs.analyze.outputs.files }}'}"
+          PROMPT="${PROMPT//'{{ pr_branch }}'/'${{ github.event.pull_request.head.ref }}'}"
+          
+          echo "prompt<<EOF" >> $GITHUB_OUTPUT
+          echo "$PROMPT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Run Tester Agent
+        id: review
+        working-directory: ./project
+        run: |
+          REVIEW_OUTPUT=$(opencode run "${{ steps.prompt.outputs.prompt }}" --model "baidu-qianfan/qianfan-code-latest" 2>&1)
+          
+          echo "review<<EOF" >> $GITHUB_OUTPUT
+          echo "$REVIEW_OUTPUT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          BAIDU_QIANFAN_API_KEY: ${{ secrets.BAIDU_QIANFAN_API_KEY }}
+
+      - name: Post review comment
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "${{ steps.review.outputs.review }}"
+
+      - name: Check if should auto-approve
+        id: approve_check
+        run: |
+          REVIEW="${{ steps.review.outputs.review }}"
+          
+          if [[ "${{ needs.analyze.outputs.auto_approve }}" == "true" ]]; then
+            if [[ "$REVIEW" == *"✅ APPROVE"* ]] || [[ "$REVIEW" == *"APPROVE"* ]]; then
+              echo "should_approve=true" >> $GITHUB_OUTPUT
+            else
+              echo "should_approve=false" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "should_approve=false" >> $GITHUB_OUTPUT
+            echo "::notice::PR requires human review (size: ${{ needs.analyze.outputs.size }})"
+          fi
+
+      - name: Auto-approve PR
+        if: steps.approve_check.outputs.should_approve == 'true'
+        run: |
+          gh pr review ${{ github.event.pull_request.number }} \
+            --approve \
+            --body "✅ **Auto-approved** by Tester Agent
+
+- All checks passed
+- Small PR (<50 lines)
+- No issues found
+
+Ready to merge."
+
+      - name: Summary
+        run: |
+          echo "## Tester Review Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **PR**: #${{ github.event.pull_request.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Size**: ${{ needs.analyze.outputs.size }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Auto-approved**: ${{ steps.approve_check.outputs.should_approve }}" >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,100 @@
+name: Coordinator - State Management
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+
+jobs:
+  daily-report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+    steps:
+      - name: Generate daily report
+        id: report
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+          YESTERDAY=$(date -u -d "yesterday" +%Y-%m-%d)
+          
+          # Count issues created today
+          ISSUES_TODAY=$(gh issue list --state all --search "created:>$TODAY" --json number --jq 'length' 2>/dev/null || echo "0")
+          
+          # Count PRs created today
+          PRS_TODAY=$(gh pr list --state all --search "created:>$TODAY" --json number --jq 'length' 2>/dev/null || echo "0")
+          
+          # Count open issues
+          OPEN_ISSUES=$(gh issue list --state open --json number --jq 'length' 2>/dev/null || echo "0")
+          
+          # Count open PRs
+          OPEN_PRS=$(gh pr list --state open --json number --jq 'length' 2>/dev/null || echo "0")
+          
+          echo "issues_today=$ISSUES_TODAY" >> $GITHUB_OUTPUT
+          echo "prs_today=$PRS_TODAY" >> $GITHUB_OUTPUT
+          echo "open_issues=$OPEN_ISSUES" >> $GITHUB_OUTPUT
+          echo "open_prs=$OPEN_PRS" >> $GITHUB_OUTPUT
+          
+          cat << EOF
+          ## Daily Report - $TODAY
+          
+          ### Activity Today
+          - Issues created: $ISSUES_TODAY/5
+          - PRs created: $PRS_TODAY/10
+          
+          ### Current State
+          - Open issues: $OPEN_ISSUES
+          - Open PRs: $OPEN_PRS
+          
+          ### Limits Status
+          - Issues: $([ $ISSUES_TODAY -ge 5 ] && echo "⚠️ LIMIT REACHED" || echo "✅ OK")
+          - PRs: $([ $PRS_TODAY -ge 10 ] && echo "⚠️ LIMIT REACHED" || echo "✅ OK")
+          EOF
+
+      - name: Create summary
+        run: |
+          echo "${{ steps.report.outputs.issues_today }}" > /tmp/report.md
+          cat /tmp/report.md >> $GITHUB_STEP_SUMMARY
+
+      - name: Check limits and alert
+        run: |
+          ISSUES=${{ steps.report.outputs.issues_today }}
+          PRS=${{ steps.report.outputs.prs_today }}
+          
+          if [[ $ISSUES -ge 5 ]] || [[ $PRS -ge 10 ]]; then
+            echo "::warning::Daily limits reached - Issues: $ISSUES/5, PRs: $PRS/10"
+          fi
+
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Clean up old branches
+        run: |
+          # List merged PR branches older than 7 days
+          gh pr list --state merged --json headRefName,mergedAt --jq '.[] | select(.mergedAt < "$(date -u -d "7 days ago" -Iseconds)") | .headRefName' 2>/dev/null || true
+          
+          echo "Branch cleanup complete"
+
+      - name: Close stale issues
+        run: |
+          # Add 'stale' label to issues with no activity for 30 days
+          STALE_ISSUES=$(gh issue list --state open --search "updated:<$(date -u -d '30 days ago' +%Y-%m-%d)" --json number --jq '..[].number' 2>/dev/null || true)
+          
+          for issue in $STALE_ISSUES; do
+            gh issue edit $issue --add-label "stale" 2>/dev/null || true
+            gh issue comment $issue --body "This issue has been marked as stale due to inactivity for 30 days. It will be closed in 7 days if no further activity occurs." 2>/dev/null || true
+          done
+          
+          echo "Stale issues processed: $(echo "$STALE_ISSUES" | wc -l)"
+
+      - name: Summary
+        run: |
+          echo "## Coordinator Tasks Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Daily report generated" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Old branches cleaned" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Stale issues marked" >> $GITHUB_STEP_SUMMARY

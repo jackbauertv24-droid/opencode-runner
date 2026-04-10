@@ -1,0 +1,182 @@
+name: Coder - Implement Solutions
+
+on:
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: 'Issue number to implement'
+        required: true
+        type: number
+
+jobs:
+  implement:
+    if: github.actor == 'jackbauertv24-droid'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: read
+    steps:
+      - name: Get issue number
+        id: issue
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "number=${{ inputs.issue_number }}" >> $GITHUB_OUTPUT
+          else
+            echo "number=${{ github.event.issue.number }}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check if issue is approved
+        id: check
+        run: |
+          ISSUE_LABELS=$(gh issue view ${{ steps.issue.outputs.number }} --json labels --jq '.labels.[].name' 2>/dev/null || echo "")
+          
+          if [[ "$ISSUE_LABELS" == *"approved"* ]] || [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            echo "can_proceed=true" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Issue not approved. Add 'approved' label to proceed."
+            echo "can_proceed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Checkout repository
+        if: steps.check.outputs.can_proceed == 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Configure Git
+        if: steps.check.outputs.can_proceed == 'true'
+        run: |
+          git config user.name "AI Coder"
+          git config user.email "coder@opencode-runner.local"
+
+      - name: Create feature branch
+        if: steps.check.outputs.can_proceed == 'true'
+        run: |
+          git checkout -b feature/issue-${{ steps.issue.outputs.number }}
+
+      - name: Get issue details
+        if: steps.check.outputs.can_proceed == 'true'
+        id: details
+        run: |
+          ISSUE_DATA=$(gh issue view ${{ steps.issue.outputs.number }} --json title,body)
+          
+          TITLE=$(echo "$ISSUE_DATA" | jq -r '.title')
+          BODY=$(echo "$ISSUE_DATA" | jq -r '.body')
+          
+          echo "title=$TITLE" >> $GITHUB_OUTPUT
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Install OpenCode
+        if: steps.check.outputs.can_proceed == 'true'
+        run: curl -fsSL https://opencode.ai/install | bash
+
+      - name: Add OpenCode to PATH
+        if: steps.check.outputs.can_proceed == 'true'
+        run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
+
+      - name: Load Coder prompt
+        if: steps.check.outputs.can_proceed == 'true'
+        id: prompt
+        run: |
+          PROMPT=$(cat .github/agent-prompts/coder.md)
+          PROMPT="${PROMPT//'{{ issue_number }}'/'${{ steps.issue.outputs.number }}'}"
+          PROMPT="${PROMPT//'{{ issue_title }}'/'${{ steps.details.outputs.title }}'}"
+          PROMPT="${PROMPT//'{{ issue_body }}'/'${{ steps.details.outputs.body }}'}"
+          
+          echo "prompt<<EOF" >> $GITHUB_OUTPUT
+          echo "$PROMPT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Run Coder Agent
+        if: steps.check.outputs.can_proceed == 'true'
+        working-directory: ./project
+        run: |
+          opencode run "${{ steps.prompt.outputs.prompt }}" --model "tencent-coding-plan/glm-5"
+        env:
+          TENCENT_CODING_PLAN_API_KEY: ${{ secrets.TENCENT_CODING_PLAN_API_KEY }}
+
+      - name: Validate changes are within project/
+        if: steps.check.outputs.can_proceed == 'true'
+        id: validate
+        run: |
+          CHANGED_FILES=$(git diff --name-only HEAD)
+          VIOLATION=false
+          
+          echo "Changed files:"
+          echo "$CHANGED_FILES"
+          
+          for file in $CHANGED_FILES; do
+            if [[ ! "$file" =~ ^project/ ]]; then
+              echo "::error::Agent attempted to modify restricted file: $file"
+              VIOLATION=true
+            fi
+          done
+          
+          if [[ "$VIOLATION" == "true" ]]; then
+            echo "::error::Agent violated path constraints. Reverting changes."
+            git checkout .
+            git checkout main
+            git branch -D feature/issue-${{ steps.issue.outputs.number }}
+            exit 1
+          fi
+          
+          echo "✅ All changes are within project/ directory"
+
+      - name: Check for changes
+        if: steps.check.outputs.can_proceed == 'true'
+        id: changes
+        run: |
+          if git diff --quiet HEAD; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit changes
+        if: steps.check.outputs.can_proceed == 'true' && steps.changes.outputs.has_changes == 'true'
+        run: |
+          git add project/
+          git commit -m "feat: implement issue #${{ steps.issue.outputs.number }}
+
+${{ steps.details.outputs.title }}
+
+Closes #${{ steps.issue.outputs.number }}"
+
+      - name: Push branch
+        if: steps.check.outputs.can_proceed == 'true' && steps.changes.outputs.has_changes == 'true'
+        run: |
+          git push origin feature/issue-${{ steps.issue.outputs.number }}
+
+      - name: Create Pull Request
+        if: steps.check.outputs.can_proceed == 'true' && steps.changes.outputs.has_changes == 'true'
+        run: |
+          gh pr create \
+            --title "Implement: ${{ steps.details.outputs.title }}" \
+            --body "## Summary
+Implements issue #${{ steps.issue.outputs.number }}
+
+## Changes
+See commit history for details.
+
+## Testing
+- [ ] Tests added/updated
+- [ ] All tests pass
+
+Closes #${{ steps.issue.outputs.number }}" \
+            --label "needs-review" \
+            --base main
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Coder Run Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Issue**: #${{ steps.issue.outputs.number }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Title**: ${{ steps.details.outputs.title }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ steps.check.outputs.can_proceed == 'true' && 'Implemented' || 'Skipped (not approved)' }}" >> $GITHUB_STEP_SUMMARY

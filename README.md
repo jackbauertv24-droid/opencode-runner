@@ -1,241 +1,331 @@
 # OpenCode GitHub Actions Runner
 
-Run [OpenCode](https://opencode.ai) in non-interactive mode with GitHub Actions using your own API endpoint and model.
+A multi-agent AI system that runs on GitHub Actions to continuously improve a target project.
 
-## Project Overview
-
-This repository provides a GitHub Actions workflow that runs OpenCode (an AI coding assistant) in non-interactive mode. It allows you to:
-
-- Use **any OpenAI-compatible API endpoint** (Volces Ark, local LLMs, custom proxies, etc.)
-- Run OpenCode **automatically** via GitHub Actions
-- Keep your **API keys secure** in GitHub Secrets
-
-## How It Works
+## System Overview
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    GitHub Repository                         │
-│                                                              │
-│  ┌─────────────────┐    ┌─────────────────┐                │
-│  │  opencode.json  │    │  workflow yml   │                │
-│  │  (config file)  │    │  (instructions) │                │
-│  └─────────────────┘    └─────────────────┘                │
-│         │                       │                           │
-│         │ defines                │ uses                     │
-│         ▼                       ▼                           │
-│  ┌─────────────────┐    ┌─────────────────┐                │
-│  │ Provider Config │    │ OpenCode CLI    │                │
-│  │ - baseURL       │    │ opencode run    │                │
-│  │ - model name    │    │                 │                │
-│  └─────────────────┘    └─────────────────┘                │
-│                                 │                           │
-└─────────────────────────────────│───────────────────────────┘
-                                  │
-                                  │ calls with API key
-                                  ▼
-                    ┌─────────────────────────┐
-                    │    Your API Endpoint    │
-                    │  (Volces Ark, etc.)     │
-                    └─────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│           OPENCODE-RUNNER (Orchestration Layer)                 │
+│                                                                 │
+│   Workflows & Prompts          Target Project (project/)        │
+│   .github/workflows/    ──▶    Agents work HERE                 │
+│   .github/agent-prompts/        • Create code                   │
+│                                • Write tests                    │
+│                                • Documentation                  │
+│                                                                 │
+│   ┌───────────────┐  ┌───────────────┐  ┌───────────────┐      │
+│   │ PRODUCT OWNER │  │    CODER      │  │    TESTER     │      │
+│   │  (Volcengine) │  │   (Tencent)   │  │    (Baidu)    │      │
+│   └───────────────┘  └───────────────┘  └───────────────┘      │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## File Structure
+## AI Agent Team
+
+| Agent | Role | Model | Trigger |
+|-------|------|-------|---------|
+| **Product Owner** | Research, plan, create issues | Volcengine Ark | Daily 9am UTC + Manual |
+| **Coder** | Implement solutions, create PRs | Tencent GLM-5 | Issue created/labeled |
+| **Tester** | Review code, test, approve PRs | Baidu Qianfan | PR opened/updated |
+
+## Continuous Improvement Loop
+
+```
+1. Product Owner analyzes codebase daily
+   ↓
+2. Creates well-defined issues
+   ↓
+3. Coder picks up issues and implements
+   ↓
+4. Tester reviews PRs for quality
+   ↓
+5. Approved PRs merge
+   ↓
+6. Product Owner analyzes improvements
+   ↓
+   (loop continues)
+```
+
+## Architecture
+
+### Directory Structure
 
 ```
 opencode-runner/
 ├── .github/
-│   └── workflows/
-│       └── opencode-manual.yml   # GitHub Actions workflow
-├── opencode.json                  # OpenCode configuration
+│   ├── workflows/
+│   │   ├── product-owner.yml    # PO orchestration
+│   │   ├── coder.yml             # Coder orchestration
+│   │   ├── tester.yml            # Tester orchestration
+│   │   ├── coordinator.yml       # State & limits
+│   │   └── opencode-manual.yml   # Manual testing
+│   ├── agent-prompts/
+│   │   ├── product-owner.md      # PO system prompt
+│   │   ├── coder.md              # Coder system prompt
+│   │   └── tester.md             # Tester system prompt
+│   └── AGENT_CONFIG.yml          # Configuration
+│
+├── project/                       # ← TARGET PROJECT
+│   ├── src/                       # Agents create code here
+│   ├── tests/                     # Agents create tests here
+│   └── README.md                  # Project documentation
+│
+├── opencode.json                  # Provider config
 └── README.md                      # This file
 ```
 
-## Current Setup
+### Path Constraints
 
-| Component | Value |
-|-----------|-------|
-| **Provider** | Volces Ark Coding |
-| **API Endpoint** | `https://ark.cn-beijing.volces.com/api/coding/v3` |
-| **Model** | `ark-code-latest` |
-| **API Key Secret** | `VOLCES_ARK_API_KEY` |
+**CRITICAL**: Agents are restricted to the `project/` directory.
 
-## Usage
+| Agent | Allowed Paths | Forbidden Paths |
+|-------|---------------|-----------------|
+| Product Owner | Read `project/` | Modify any files |
+| Coder | Modify `project/src/`, `project/tests/`, `project/docs/` | `.github/`, `opencode.json`, root files |
+| Tester | Read `project/` | Modify any files |
 
-### Step 1: Trigger the Workflow
+## Workflows
 
-1. Go to your repository on GitHub
-2. Click the **Actions** tab
-3. Select **opencode-manual** from the left sidebar
-4. Click **Run workflow** button (top right)
-5. Fill in the inputs:
-   - **prompt**: Your task/question (required)
-   - **model**: Model to use (default: `volces-ark/ark-code-latest`)
-   - **agent**: Agent type (default: `build`)
-6. Click **Run workflow**
+### 1. Product Owner (`product-owner.yml`)
 
-### Step 2: View Results
+**Triggers:**
+- Scheduled: Daily at 9am UTC
+- Manual: `workflow_dispatch` with focus area input
 
-1. Click on the running workflow
-2. Click on the **opencode** job
-3. Expand **Run OpenCode** step
-4. See the model's response
+**Responsibilities:**
+- Analyze `project/` codebase
+- Identify improvements (performance, security, features, tech debt)
+- Create issues with clear acceptance criteria
+- Prioritize using MoSCoW (P1-P3)
 
-### Example
+**Rate Limits:**
+- Max 5 issues per day
+- Max 2 issues per run
 
+**Manual Trigger:**
+```bash
+gh workflow run product-owner.yml \
+  -f focus_area="performance" \
+  -f priority="P2-important"
 ```
-Input:
-  prompt: "Explain what this repository does"
 
-Output:
-  This repository provides a GitHub Actions workflow that runs 
-  OpenCode in non-interactive mode with custom API endpoints...
+### 2. Coder (`coder.yml`)
+
+**Triggers:**
+- Issue labeled with `approved`
+- Manual: `workflow_dispatch` with issue number
+
+**Responsibilities:**
+- Implement issue solutions
+- Follow code standards
+- Write tests
+- Create pull requests
+
+**Safeguards:**
+- Path validation (only `project/` allowed)
+- Max 500 lines per PR
+- Tests required for new functions
+
+**Manual Trigger:**
+```bash
+gh workflow run coder.yml -f issue_number=42
 ```
+
+### 3. Tester (`tester.yml`)
+
+**Triggers:**
+- Pull request opened/synchronized/reopened
+
+**Responsibilities:**
+- Review code quality
+- Run tests
+- Check security, performance
+- Post review comments
+
+**Auto-Approve:**
+- Small PRs (<50 lines, <5 files)
+- All checks pass
+- Tester auto-approves
+
+**Human Review Required:**
+- Medium PRs (50-200 lines)
+- Large PRs (>200 lines)
+- P1-critical issues
+
+### 4. Coordinator (`coordinator.yml`)
+
+**Triggers:**
+- Scheduled: Daily at midnight UTC
+- Manual: `workflow_dispatch`
+
+**Responsibilities:**
+- Daily activity reports
+- Rate limit enforcement
+- Branch cleanup
+- Stale issue management
+
+## Safeguards
+
+### Owner-Only Triggers
+All workflows verify `github.actor == 'jackbauertv24-droid'`.
+
+### Rate Limits
+| Resource | Limit | Alert At |
+|----------|-------|----------|
+| Issues per day | 5 | 80% |
+| PRs per day | 10 | 80% |
+
+### Path Validation
+```yaml
+# Validates all changed files are in project/
+for file in $CHANGED_FILES; do
+  if [[ ! "$file" =~ ^project/ ]]; then
+    echo "ERROR: Agent violated path constraint"
+    git checkout .
+    exit 1
+  fi
+done
+```
+
+### Human Checkpoints
+- P1-critical issues → require human label
+- PRs > 200 lines → require human review
+- Breaking changes → require human approval
 
 ## Configuration
 
-### Changing the API Endpoint
+### Secrets (Already Configured)
+| Secret | Purpose |
+|--------|---------|
+| `VOLCENGINE_ARK_API_KEY` | Product Owner agent |
+| `TENCENT_CODING_PLAN_API_KEY` | Coder agent |
+| `BAIDU_QIANFAN_API_KEY` | Tester agent |
 
-Edit `opencode.json`:
-
-```json
-{
-  "$schema": "https://opencode.ai/config.json",
-  "provider": {
-    "my-provider": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "My Custom Provider",
-      "options": {
-        "baseURL": "https://your-api.example.com/v1",
-        "apiKey": "{env:MY_PROVIDER_API_KEY}"
-      },
-      "models": {
-        "your-model": { "name": "Your Model Name" }
-      }
-    }
-  },
-  "model": "my-provider/your-model"
-}
+### Agent Config (`.github/AGENT_CONFIG.yml`)
+```yaml
+agents:
+  product-owner:
+    model: volcengine-ark/ark-code-latest
+    schedule: "0 9 * * *"
+    max_issues_per_day: 5
+    
+  coder:
+    model: tencent-coding-plan/glm-5
+    max_prs_per_day: 10
+    
+  tester:
+    model: baidu-qianfan/qianfan-code-latest
+    auto_approve_threshold:
+      lines: 50
+      files: 5
 ```
 
-### Setting the API Key Secret
+## Usage
 
-1. Go to **Settings → Secrets and variables → Actions**
-2. Click **New repository secret**
-3. Name: `MY_PROVIDER_API_KEY` (must match `{env:XXX}` in config)
-4. Value: Your API key
-5. Click **Add secret**
-
-### API Key Naming Rule
-
-The secret name must match the `apiKey` field in `opencode.json`:
-
-| In config `apiKey` | Secret name |
-|--------------------|-------------|
-| `{env:VOLCES_ARK_API_KEY}` | `VOLCES_ARK_API_KEY` |
-| `{env:MY_PROVIDER_API_KEY}` | `MY_PROVIDER_API_KEY` |
-
-## Example Configurations
-
-### OpenAI
-
-```json
-{
-  "provider": {
-    "openai": {
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "https://api.openai.com/v1",
-        "apiKey": "{env:OPENAI_API_KEY}"
-      },
-      "models": { "gpt-4o": { "name": "GPT-4o" } }
-    }
-  },
-  "model": "openai/gpt-4o"
-}
+### Manual Testing
+Use `opencode-manual.yml` for ad-hoc tests:
+```bash
+gh workflow run opencode-manual.yml \
+  -f prompt="Add a hello world function" \
+  -f model="volcengine-ark/ark-code-latest"
 ```
 
-Secret: `OPENAI_API_KEY`
+### View Agent Activity
+```bash
+# Daily report
+gh run list --workflow coordinator.yml --limit 1
 
-### Local Ollama Server
-
-```json
-{
-  "provider": {
-    "ollama": {
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "http://your-server:11434/v1"
-      },
-      "models": { "llama3": { "name": "Llama 3" } }
-    }
-  },
-  "model": "ollama/llama3"
-}
+# Agent runs
+gh run list --workflow product-owner.yml
+gh run list --workflow coder.yml
+gh run list --workflow tester.yml
 ```
 
-Note: Ollama may not require an API key for local servers.
-
-### Anthropic
-
-```json
-{
-  "provider": {
-    "anthropic": {
-      "options": {
-        "baseURL": "https://api.anthropic.com",
-        "apiKey": "{env:ANTHROPIC_API_KEY}"
-      },
-      "models": { "claude-sonnet-4-20250514": {} }
-    }
-  },
-  "model": "anthropic/claude-sonnet-4-20250514"
-}
+### Check Limits
+```bash
+gh issue list --state all --search "created:>$(date -u +%Y-%m-%d)"
+gh pr list --state all --search "created:>$(date -u +%Y-%m-%d)"
 ```
-
-Secret: `ANTHROPIC_API_KEY`
 
 ## Security
 
-### What's Stored Where
+### What's Protected
+- ✅ API keys in GitHub Secrets (encrypted)
+- ✅ Agent paths restricted to `project/`
+- ✅ Owner-only triggers
+- ✅ Rate limits prevent runaway behavior
+- ✅ Secrets masked in logs as `***`
 
-| Data | Location | Visible? |
-|------|----------|----------|
-| API endpoint URL | `opencode.json` (repo) | ✅ Yes (public) |
-| Model name | `opencode.json` (repo) | ✅ Yes (public) |
-| API key | GitHub Secrets | ❌ No (encrypted) |
-| API key in logs | GitHub Actions | ❌ No (masked as `***`) |
+### What's Public
+- ⚠️ Workflow files in `.github/workflows/`
+- ⚠️ Agent prompts in `.github/agent-prompts/`
+- ⚠️ Configuration in `.github/AGENT_CONFIG.yml`
+- ⚠️ Model names and endpoints
 
 ### Best Practices
-
-1. **Never commit API keys** to git
-2. **Always use GitHub Secrets** for sensitive data
-3. **Rotate keys** if you suspect exposure
-4. **Review workflow logs** before sharing
+1. **Review agent outputs** before merging
+2. **Set appropriate rate limits** for your needs
+3. **Monitor costs** via coordinator reports
+4. **Rotate API keys** periodically
 
 ## Troubleshooting
 
-### "Failed to parse JSON"
+### Agent created files outside `project/`
+This should never happen due to path validation. If it does:
+1. The workflow will fail
+2. Changes will be reverted
+3. Check the logs for validation errors
 
-- Ensure `opencode.json` is valid JSON (use a validator)
-- Check for missing quotes, commas, or brackets
+### Issue not picked up by Coder
+- Ensure issue has `approved` label
+- Check daily limit hasn't been reached
+- Verify issue is well-defined
 
-### "API key invalid"
+### PR not auto-approved
+- Check PR size (must be <50 lines, <5 files)
+- Review Tester agent comments
+- Look for issues in the review
 
-- Verify the secret name matches `{env:XXX}` in config
-- Check if the API key is correct in GitHub Secrets
-- Test your API endpoint directly with curl
+### Workflow skipped
+- Verify you're the repo owner (`jackbauertv24-droid`)
+- Check if daily limits reached
+- Review workflow conditions
 
-### "Model not found"
+## Example Flow
 
-- Verify the model name matches your provider's available models
-- Check the `models` section in `opencode.json`
+**Day 1:**
+```
+09:00 - Product Owner analyzes project/
+       Creates issue #1: "Add error handling"
+       Creates issue #2: "Improve test coverage"
+
+09:05 - Coder picks up issue #1
+       Implements solution in project/src/
+       Creates PR #1
+
+09:10 - Tester reviews PR #1
+       Small change (<50 lines)
+       Auto-approves ✓
+
+09:15 - PR #1 merged
+       Coder picks up issue #2
+       Creates PR #2
+
+09:20 - Tester reviews PR #2
+       Medium change (150 lines)
+       Requests human review
+
+14:00 - Human approves PR #2
+       Merged ✓
+```
 
 ## Documentation
 
 - [OpenCode Documentation](https://opencode.ai/docs)
 - [OpenCode Providers](https://opencode.ai/docs/providers)
-- [OpenCode Configuration](https://opencode.ai/docs/config)
-- [GitHub Actions Secrets](https://docs.github.com/en/actions/security-guides/encrypted-secrets)
+- [GitHub Actions Workflows](https://docs.github.com/en/actions/using-workflows)
 
 ## License
 
