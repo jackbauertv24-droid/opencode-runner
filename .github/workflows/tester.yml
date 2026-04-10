@@ -44,6 +44,8 @@ jobs:
               echo "::notice::No PRs to review"
             fi
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Exit if no PR
         if: steps.find-pr.outputs.found != 'true'
@@ -116,6 +118,8 @@ jobs:
         run: |
           gh pr comment ${{ steps.find-pr.outputs.number }} --body "${{ steps.review.outputs.review }}"
           gh pr edit ${{ steps.find-pr.outputs.number }} --remove-label "needs-review"
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Auto-approve if eligible
         if: steps.find-pr.outputs.found == 'true' && steps.pr.outputs.auto == 'true'
@@ -124,3 +128,5 @@ jobs:
             gh pr review ${{ steps.find-pr.outputs.number }} --approve --body "Auto-approved by Tester"
             echo "::notice::Auto-approved PR #${{ steps.find-pr.outputs.number }}"
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
