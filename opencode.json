@@ -1,0 +1,18 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "volces-ark": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Volces Ark Coding",
+      "options": {
+        "baseURL": "https://ark.cn-beijing.volces.com/api/coding/v3"
+      },
+      "models": {
+        "ark-code-latest": {
+          "name": "Ark Code Latest"
+        }
+      }
+    }
+  },
+  "model": "volces-ark/ark-code-latest"
+}

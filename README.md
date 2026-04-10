@@ -6,8 +6,7 @@ Run OpenCode in non-interactive mode with GitHub Actions. Supports custom API en
 
 - **Multiple Trigger Types**: Issue/PR comments, scheduled tasks, PR events, manual dispatch, push events
 - **Custom Endpoints**: OpenAI-compatible, Anthropic, or any custom API
-- **Flexible Configuration**: Inline config via secrets or file-based config
-- **Multiple Providers**: Support for multiple endpoints simultaneously
+- **Simple Configuration**: Config file in repo, only API keys in secrets
 
 ## Quick Start
 
@@ -17,57 +16,66 @@ Run OpenCode in non-interactive mode with GitHub Actions. Supports custom API en
 gh repo clone jackbauertv24-droid/opencode-runner
 ```
 
-### 2. Configure Secrets
+### 2. Configure API Key Secret
 
-Go to **Settings → Secrets and variables → Actions** and add:
+Go to **Settings → Secrets and variables → Actions → New repository secret**:
 
-| Secret | Description | Example |
-|--------|-------------|---------|
-| `OPENCODE_CONFIG` | JSON config with custom endpoints | See [opencode.example.json](opencode.example.json) |
-| `CUSTOM_API_KEY` | Your API key (name matches provider ID) | `sk-...` |
+| Secret | Description |
+|--------|-------------|
+| `VOLCES_ARK_API_KEY` | Your Volces Ark API key |
 
-### 3. Optionally Configure Variables
+### 3. Customize opencode.json (Optional)
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `DEFAULT_MODEL` | Default model to use | `custom-provider/model-name` |
-| `DEFAULT_AGENT` | Default agent | `build` |
+Edit `opencode.json` in the repo root to change provider/model:
+
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "your-provider": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Your Provider Name",
+      "options": {
+        "baseURL": "https://your-api.example.com/v1"
+      },
+      "models": {
+        "your-model": { "name": "Your Model" }
+      }
+    }
+  },
+  "model": "your-provider/your-model"
+}
+```
 
 ### 4. Trigger OpenCode
 
-Depending on the workflow:
 - **Issue/PR Comments**: Add `/opencode` or `/oc` in comments
 - **Scheduled**: Runs automatically based on cron schedule
 - **PR Events**: Automatically reviews new/updated PRs
 - **Manual**: Trigger from Actions UI with custom inputs
 - **Push**: Automatically analyzes pushed code
 
+## API Key Naming Convention
+
+The secret name must match your provider ID in `opencode.json`:
+
+| Provider ID in config | Secret name |
+|-----------------------|-------------|
+| `volces-ark` | `VOLCES_ARK_API_KEY` |
+| `my-custom-api` | `MY_CUSTOM_API_API_KEY` |
+| `ollama-remote` | `OLLAMA_REMOTE_API_KEY` |
+
+**Rule**: Convert provider ID to uppercase, replace hyphens with underscores, append `_API_KEY`.
+
 ## Workflows
 
-### opencode.yml
-**Triggers**: Issue comments, PR review comments  
-**Usage**: Mention `/opencode` or `/oc` in any comment
-
-### opencode-scheduled.yml
-**Triggers**: Scheduled (cron), manual dispatch  
-**Usage**: Automated tasks on schedule or manual trigger with prompt input
-
-### opencode-pr.yml
-**Triggers**: PR opened, synchronized, reopened  
-**Usage**: Automatic PR review
-
-### opencode-manual.yml
-**Triggers**: Manual dispatch  
-**Inputs**: 
-- `prompt` - Task to execute
-- `model` - Model override
-- `endpoint_type` - Endpoint type selection
-- `custom_baseurl` - Custom base URL override
-- `agent` - Agent selection (build/plan)
-
-### opencode-push.yml
-**Triggers**: Push to main/master/develop  
-**Usage**: Automatic code analysis on pushes
+| Workflow | Trigger | Purpose |
+|----------|---------|---------|
+| `opencode.yml` | `/opencode` or `/oc` in comments | Respond to issue/PR comments |
+| `opencode-scheduled.yml` | Cron schedule | Automated periodic tasks |
+| `opencode-pr.yml` | PR open/sync/reopen | Auto-review PRs |
+| `opencode-manual.yml` | Manual dispatch | Trigger from Actions UI |
+| `opencode-push.yml` | Push to main/master/develop | Analyze pushed code |
 
 ## Configuration Examples
 
@@ -76,20 +84,16 @@ Depending on the workflow:
 ```json
 {
   "provider": {
-    "my-custom-api": {
+    "my-api": {
       "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "https://your-api.example.com/v1"
-      },
-      "models": {
-        "gpt-4": { "name": "GPT-4" }
-      }
+      "options": { "baseURL": "https://api.example.com/v1" },
+      "models": { "gpt-4": { "name": "GPT-4" } }
     }
-  }
+  },
+  "model": "my-api/gpt-4"
 }
 ```
-
-Secret: `MY_CUSTOM_API_API_KEY`
+Secret: `MY_API_API_KEY`
 
 ### Anthropic Endpoint
 
@@ -97,60 +101,33 @@ Secret: `MY_CUSTOM_API_API_KEY`
 {
   "provider": {
     "my-anthropic": {
-      "options": {
-        "baseURL": "https://your-proxy.example.com"
-      }
+      "options": { "baseURL": "https://your-proxy.example.com" }
     }
   },
   "model": "my-anthropic/claude-sonnet-4-20250514"
 }
 ```
-
 Secret: `MY_ANTHROPIC_API_KEY`
 
-### Multiple Endpoints
+### Multiple Providers
 
 ```json
 {
   "provider": {
-    "ollama-remote": {
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "http://server:11434/v1"
-      },
-      "models": {
-        "llama3": { "name": "Llama 3" }
-      }
-    },
-    "vllm-server": {
-      "npm": "@ai-sdk/openai-compatible",
-      "options": {
-        "baseURL": "http://vllm:8000/v1"
-      },
-      "models": {
-        "mistral": { "name": "Mistral" }
-      }
-    }
-  }
+    "openai": { "npm": "@ai-sdk/openai-compatible", "options": { "baseURL": "https://api.openai.com/v1" }, "models": { "gpt-4o": {} } },
+    "anthropic": { "options": { "baseURL": "https://api.anthropic.com" }, "models": { "claude-sonnet-4-20250514": {} } }
+  },
+  "model": "openai/gpt-4o"
 }
 ```
-
-Secrets: `OLLAMA_REMOTE_API_KEY`, `VLLM_SERVER_API_KEY`
-
-## API Key Naming Convention
-
-The secret name must match your provider ID:
-- Provider ID: `my-custom-api`
-- Secret name: `MY_CUSTOM_API_API_KEY`
-
-Convert provider ID to uppercase, replace hyphens with underscores, append `_API_KEY`.
+Secrets: `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`
 
 ## Documentation
 
 - [OpenCode Docs](https://opencode.ai/docs)
 - [GitHub Integration](https://opencode.ai/docs/github)
 - [Providers](https://opencode.ai/docs/providers)
-- [Config](https://opencode.ai/docs/config)
+- [Config](https://opencode.ai/config.json)
 
 ## License
 

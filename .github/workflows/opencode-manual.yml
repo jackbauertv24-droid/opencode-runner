@@ -12,21 +12,6 @@ on:
         required: false
         type: string
         default: ''
-      endpoint_type:
-        description: 'Endpoint type to use'
-        required: false
-        type: choice
-        options:
-          - 'default'
-          - 'openai-compatible'
-          - 'anthropic'
-          - 'opencode-zen'
-        default: 'default'
-      custom_baseurl:
-        description: 'Custom base URL (leave empty to use config)'
-        required: false
-        type: string
-        default: ''
       agent:
         description: 'Agent to use (build or plan)'
         required: false
@@ -51,37 +36,12 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Build dynamic config
-        id: config
-        run: |
-          if [ "${{ inputs.custom_baseurl }}" != "" ]; then
-            ENDPOINT="${{ inputs.custom_baseurl }}"
-            TYPE="${{ inputs.endpoint_type }}"
-            
-            if [ "$TYPE" == "openai-compatible" ]; then
-              CONFIG="{\"provider\":{\"manual-endpoint\":{\"npm\":\"@ai-sdk/openai-compatible\",\"options\":{\"baseURL\":\"$ENDPOINT\"},\"models\":{\"custom\":{\"name\":\"Custom Model\"}}}}"
-            elif [ "$TYPE" == "anthropic" ]; then
-              CONFIG="{\"provider\":{\"manual-anthropic\":{\"options\":{\"baseURL\":\"$ENDPOINT\"}}}}"
-            else
-              CONFIG="${{ secrets.OPENCODE_CONFIG }}"
-            fi
-            echo "config=$CONFIG" >> $GITHUB_OUTPUT
-          else
-            echo "config=${{ secrets.OPENCODE_CONFIG }}" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
-
       - name: Run OpenCode
         uses: anomalyco/opencode/github@latest
         env:
-          OPENCODE_CONFIG_CONTENT: ${{ steps.config.outputs.config }}
           VOLCES_ARK_API_KEY: ${{ secrets.VOLCES_ARK_API_KEY }}
-          CUSTOM_OPENAI_API_KEY: ${{ secrets.CUSTOM_OPENAI_API_KEY }}
-          CUSTOM_ANTHROPIC_API_KEY: ${{ secrets.CUSTOM_ANTHROPIC_API_KEY }}
-          MANUAL_ENDPOINT_API_KEY: ${{ secrets.MANUAL_ENDPOINT_API_KEY }}
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: ${{ inputs.model || vars.DEFAULT_MODEL || 'custom-provider/model-name' }}
+          model: ${{ inputs.model || 'volces-ark/ark-code-latest' }}
           prompt: ${{ inputs.prompt }}
           agent: ${{ inputs.agent }}
           share: true

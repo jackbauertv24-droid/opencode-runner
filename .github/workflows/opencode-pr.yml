@@ -22,13 +22,9 @@ jobs:
       - name: Run OpenCode Review
         uses: anomalyco/opencode/github@latest
         env:
-          OPENCODE_CONFIG_CONTENT: ${{ secrets.OPENCODE_CONFIG }}
           VOLCES_ARK_API_KEY: ${{ secrets.VOLCES_ARK_API_KEY }}
-          CUSTOM_OPENAI_API_KEY: ${{ secrets.CUSTOM_OPENAI_API_KEY }}
-          CUSTOM_ANTHROPIC_API_KEY: ${{ secrets.CUSTOM_ANTHROPIC_API_KEY }}
-          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
         with:
-          model: ${{ vars.DEFAULT_MODEL || 'custom-provider/model-name' }}
+          model: ${{ vars.DEFAULT_MODEL || 'volces-ark/ark-code-latest' }}
           prompt: |
             Review this pull request:
             - Check for code quality issues
