@@ -2,25 +2,17 @@ name: Product Owner - Research & Planning
 
 on:
   schedule:
-    - cron: '0 9 * * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       focus_area:
-        description: 'Research focus area (e.g., performance, security, features)'
+        description: 'Research focus area'
         required: false
         default: 'general improvement'
-      priority:
-        description: 'Issue priority to create'
-        type: choice
-        options:
-          - 'P2-important'
-          - 'P1-critical'
-          - 'P3-nice-to-have'
-        default: 'P2-important'
 
 jobs:
   research:
-    if: github.actor == 'jackbauertv24-droid'
+    if: github.actor == 'jackbauertv24-droid' || github.event_name == 'schedule'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,10 +29,8 @@ jobs:
           TODAY=$(date -u +%Y-%m-%d)
           ISSUES_TODAY=$(gh issue list --state all --search "created:>$TODAY" --json number --jq 'length' 2>/dev/null || echo "0")
           
-          echo "issues_today=$ISSUES_TODAY" >> $GITHUB_OUTPUT
-          
           if [[ $ISSUES_TODAY -ge 5 ]]; then
-            echo "::warning::Daily issue limit (5) reached"
+            echo "::notice::Daily issue limit (5) reached"
             echo "can_proceed=false" >> $GITHUB_OUTPUT
           else
             echo "can_proceed=true" >> $GITHUB_OUTPUT
@@ -54,31 +44,12 @@ jobs:
         if: steps.limits.outputs.can_proceed == 'true'
         run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
-      - name: Load Product Owner prompt
-        if: steps.limits.outputs.can_proceed == 'true'
-        id: prompt
-        run: |
-          PROMPT=$(cat .github/agent-prompts/product-owner.md)
-          PROMPT="${PROMPT//'{{ focus_area }}'/'${{ inputs.focus_area }}'}"
-          
-          echo "prompt<<EOF" >> $GITHUB_OUTPUT
-          echo "$PROMPT" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Run Product Owner Agent
+      - name: Load and run prompt
         if: steps.limits.outputs.can_proceed == 'true'
         working-directory: ./project
         run: |
-          opencode run "${{ steps.prompt.outputs.prompt }}" --model "volcengine-ark/ark-code-latest"
+          PROMPT=$(cat ../.github/agent-prompts/product-owner.md | sed "s/{{ focus_area }}/${{ inputs.focus_area || 'general improvement' }}/g")
+          opencode run "$PROMPT" --model "volcengine-ark/ark-code-latest"
         env:
           VOLCENGINE_ARK_API_KEY: ${{ secrets.VOLCENGINE_ARK_API_KEY }}
           GH_TOKEN: ${{ github.token }}
-
-      - name: Summary
-        if: always()
-        run: |
-          echo "## Product Owner Run Complete" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Focus**: ${{ inputs.focus_area }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Issues today**: ${{ steps.limits.outputs.issues_today }}/5" >> $GITHUB_STEP_SUMMARY
-          echo "- **Status**: ${{ steps.limits.outputs.can_proceed == 'true' && 'Completed' || 'Skipped (limit reached)' }}" >> $GITHUB_STEP_SUMMARY
