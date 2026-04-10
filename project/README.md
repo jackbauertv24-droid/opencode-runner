@@ -19,6 +19,34 @@ This project is continuously improved by an AI agent team:
 3. **Tester** reviews PRs and ensures quality
 4. Loop continues for continuous improvement
 
+## Project Structure
+
+```
+project/
+├── src/           # Source code
+├── tests/         # Test files
+├── docs/          # Documentation
+├── package.json   # Project configuration & dependencies
+├── jest.config.js # Test runner configuration
+└── .gitignore     # Git ignore patterns
+```
+
+## Setup
+
+```bash
+# Install dependencies
+npm install
+
+# Run the application
+npm start
+
+# Run tests
+npm test
+
+# Run tests with coverage
+npm run test:coverage
+```
+
 ## Constraints
 
 AI agents are **restricted** to this directory:
