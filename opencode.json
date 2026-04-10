@@ -1,12 +1,25 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "provider": {
-    "volces-ark": {
+    "baidu-qianfan": {
+      "npm": "@ai-sdk/anthropic",
+      "name": "Baidu Qianfan",
+      "options": {
+        "baseURL": "https://qianfan.baidubce.com/anthropic/coding/v1",
+        "apiKey": "{env:BAIDU_QIANFAN_API_KEY}"
+      },
+      "models": {
+        "qianfan-code-latest": {
+          "name": "Qianfan Code Latest"
+        }
+      }
+    },
+    "volcengine-ark": {
       "npm": "@ai-sdk/openai-compatible",
-      "name": "Volces Ark Coding",
+      "name": "Volcengine Ark",
       "options": {
         "baseURL": "https://ark.cn-beijing.volces.com/api/coding/v3",
-        "apiKey": "{env:VOLCES_ARK_API_KEY}"
+        "apiKey": "{env:VOLCENGINE_ARK_API_KEY}"
       },
       "models": {
         "ark-code-latest": {
@@ -15,5 +28,5 @@
       }
     }
   },
-  "model": "volces-ark/ark-code-latest"
+  "model": "volcengine-ark/ark-code-latest"
 }

@@ -8,18 +8,13 @@ on:
         required: true
         type: string
       model:
-        description: 'Model to use (format: provider/model)'
-        required: false
-        type: string
-        default: 'volces-ark/ark-code-latest'
-      agent:
-        description: 'Agent to use (build or plan)'
+        description: 'Model to use'
         required: false
         type: choice
         options:
-          - 'build'
-          - 'plan'
-        default: 'build'
+          - 'volcengine-ark/ark-code-latest'
+          - 'baidu-qianfan/qianfan-code-latest'
+        default: 'volcengine-ark/ark-code-latest'
 
 jobs:
   opencode:
@@ -39,4 +34,5 @@ jobs:
       - name: Run OpenCode
         run: opencode run "${{ inputs.prompt }}" --model "${{ inputs.model }}"
         env:
-          VOLCES_ARK_API_KEY: ${{ secrets.VOLCES_ARK_API_KEY }}
+          VOLCENGINE_ARK_API_KEY: ${{ secrets.VOLCENGINE_ARK_API_KEY }}
+          BAIDU_QIANFAN_API_KEY: ${{ secrets.BAIDU_QIANFAN_API_KEY }}
