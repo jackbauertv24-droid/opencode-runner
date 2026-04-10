@@ -1,8 +1,6 @@
 name: Coder - Implement Solutions
 
 on:
-  schedule:
-    - cron: '30 */6 * * *'
   workflow_dispatch:
     inputs:
       issue_number:

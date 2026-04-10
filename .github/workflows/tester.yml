@@ -1,8 +1,6 @@
 name: Tester - Review & Test
 
 on:
-  schedule:
-    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       pr_number:
@@ -12,7 +10,7 @@ on:
 
 jobs:
   review:
-    if: github.actor == 'jackbauertv24-droid' || github.event_name == 'schedule'
+    if: github.actor == 'jackbauertv24-droid'
     runs-on: ubuntu-latest
     permissions:
       contents: read
