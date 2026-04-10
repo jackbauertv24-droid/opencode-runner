@@ -136,20 +136,17 @@ jobs:
         id: create-pr
         if: steps.commit.outputs.committed == 'true'
         run: |
+          PR_BODY="Closes #${{ steps.find-issue.outputs.number }}
+
+          ## Implementation
+          This PR implements the solution for issue #${{ steps.find-issue.outputs.number }}.
+
+          ## Testing
+          Please review the implementation and test coverage."
+          
           PR_URL=$(gh pr create \
             --title "Implement: ${{ steps.issue.outputs.title }}" \
-            --body "Closes #${{ steps.find-issue.outputs.number }}
-
-## Implementation
-This PR implements the solution for issue #${{ steps.find-issue.outputs.number }}.
-
-## Changes
-- Files changed: $(git diff --name-only HEAD~1 -- project/ | wc -l)
-- Lines added: $(git diff HEAD~1 --stat -- project/ | tail -1 | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo '0')
-- Lines removed: $(git diff HEAD~1 --stat -- project/ | tail -1 | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo '0')
-
-## Testing
-Please review the implementation and test coverage." \
+            --body "$PR_BODY" \
             --label "needs-review" --json url 2>/dev/null || echo "")
           
           if [[ -n "$PR_URL" ]]; then
