@@ -108,13 +108,13 @@ jobs:
             sed "s/{{ pr_files }}/${{ steps.pr.outputs.files }}/g" | \
             sed "s|{{ pr_branch }}|${{ steps.pr.outputs.branch }}|g")
           
-          REVIEW=$(opencode run "$PROMPT" --model "baidu-qianfan/qianfan-code-latest" 2>&1)
+          REVIEW=$(opencode run "$PROMPT" --model "volcengine-ark/ark-code-latest" 2>&1)
           
           echo "review<<EOF" >> $GITHUB_OUTPUT
           echo "$REVIEW" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
         env:
-          BAIDU_QIANFAN_API_KEY: ${{ secrets.BAIDU_QIANFAN_API_KEY }}
+          VOLCENGINE_ARK_API_KEY: ${{ secrets.VOLCENGINE_ARK_API_KEY }}
 
       - name: Post review comment
         if: steps.find-pr.outputs.found == 'true'
