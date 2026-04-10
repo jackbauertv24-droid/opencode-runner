@@ -122,9 +122,9 @@ Analyze the codebase in `project/` and identify:
 - Code quality issues
 
 ### 2. Prioritize (MoSCoW)
-- **P1-Critical**: Security issues, breaking bugs, data loss risks
-- **P2-Important**: Feature gaps, major improvements, user pain points
-- **P3-Nice-to-have**: Minor enhancements, refactors, optimizations
+- **P1-critical**: Security issues, breaking bugs, data loss risks (label: P1-critical)
+- **P2-important**: Feature gaps, major improvements, user pain points (label: P2-important)
+- **P3-nice-to-have**: Minor enhancements, refactors, optimizations (label: P3-nice-to-have)
 
 ### 3. Create Issues
 Each issue must have:
@@ -172,7 +172,7 @@ gh issue create \
 - [ ] [verification step]
 
 ## Effort: S/M/L" \
-  --label "bug,P1-critical"
+  --label "bug" --label "P1-critical"
 ```
 
 ### Feature Request
@@ -190,7 +190,7 @@ gh issue create \
 - [ ] [test coverage]
 
 ## Effort: M" \
-  --label "enhancement,P2-important"
+  --label "enhancement" --label "P2-important"
 ```
 
 ### Technical Debt
@@ -212,7 +212,7 @@ gh issue create \
 [Performance/maintainability gains]
 
 ## Effort: S" \
-  --label "tech-debt,P3-nice-to-have"
+  --label "tech-debt" --label "P3-nice-to-have"
 ```
 
 ## Decision Framework

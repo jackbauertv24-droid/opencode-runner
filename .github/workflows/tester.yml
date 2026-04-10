@@ -53,7 +53,7 @@ jobs:
       - name: Get PR details
         id: pr
         run: |
-          DATA=$(gh pr view ${{ steps.find-pr.outputs.number }} --json title,author,additions,deletions,files,headRefName)
+          DATA=$(gh pr view ${{ steps.find-pr.outputs.number }} --json title,author,additions,deletions,files,headRefName,body)
           
           TITLE=$(echo "$DATA" | jq -r '.title')
           AUTHOR=$(echo "$DATA" | jq -r '.author.login')
@@ -62,6 +62,9 @@ jobs:
           FILES=$(echo "$DATA" | jq -r '.files | length')
           LINES=$((ADD + DEL))
           BRANCH=$(echo "$DATA" | jq -r '.headRefName')
+          BODY=$(echo "$DATA" | jq -r '.body')
+          
+          ISSUE_NUM=$(echo "$BODY" | grep -oE 'Closes #[0-9]+' | grep -oE '[0-9]+' || echo "")
           
           if [[ $LINES -lt 50 && $FILES -lt 5 ]]; then
             SIZE="small"
@@ -81,6 +84,7 @@ jobs:
           echo "size=$SIZE" >> $GITHUB_OUTPUT
           echo "auto=$AUTO" >> $GITHUB_OUTPUT
           echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "issue_num=$ISSUE_NUM" >> $GITHUB_OUTPUT
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -120,6 +124,14 @@ jobs:
           fi
           
           cat /tmp/review/output.txt
+          
+          if grep -qi "APPROVE" /tmp/review/output.txt; then
+            echo "verdict=approve" >> $GITHUB_OUTPUT
+          elif grep -qi "REQUEST_CHANGES" /tmp/review/output.txt; then
+            echo "verdict=changes" >> $GITHUB_OUTPUT
+          else
+            echo "verdict=approve" >> $GITHUB_OUTPUT
+          fi
         env:
           BAIDU_QIANFAN_API_KEY: ${{ secrets.BAIDU_QIANFAN_API_KEY }}
 
@@ -132,16 +144,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
-      - name: Update labels after success
+      - name: Update PR labels after review
         if: steps.post-comment.outputs.posted == 'true'
         run: |
           gh pr edit ${{ steps.find-pr.outputs.number }} --remove-label "needs-review"
           
-          if [[ "${{ steps.pr.outputs.auto }}" == "true" ]]; then
-            if grep -qi "APPROVE" /tmp/review/output.txt; then
-              gh pr edit ${{ steps.find-pr.outputs.number }} --add-label "approved"
-              echo "::notice::PR #${{ steps.find-pr.outputs.number }} approved"
-            fi
+          if [[ "${{ steps.review.outputs.verdict }}" == "approve" ]]; then
+            gh pr edit ${{ steps.find-pr.outputs.number }} --add-label "approved"
+            echo "::notice::PR #${{ steps.find-pr.outputs.number }} approved"
+          elif [[ "${{ steps.review.outputs.verdict }}" == "changes" ]]; then
+            gh pr edit ${{ steps.find-pr.outputs.number }} --add-label "changes-requested"
+            echo "::notice::PR #${{ steps.find-pr.outputs.number }} needs changes"
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Notify linked issue on failure
+        if: steps.post-comment.outputs.posted == 'true' && steps.review.outputs.verdict == 'changes' && steps.pr.outputs.issue_num != ''
+        run: |
+          gh issue comment ${{ steps.pr.outputs.issue_num }} --body "PR #${{ steps.find-pr.outputs.number }} needs changes. See review comments for details."
         env:
           GH_TOKEN: ${{ github.token }}

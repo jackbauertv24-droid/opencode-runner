@@ -17,7 +17,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      issues: read
+      issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -56,7 +56,6 @@ jobs:
         run: exit 0
 
       - name: Get issue details
-        if: steps.find-issue.outputs.found == 'true'
         id: issue
         run: |
           DATA=$(gh issue view ${{ steps.find-issue.outputs.number }} --json title,body)
@@ -67,60 +66,115 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Mark issue as in-progress
+        id: mark-progress
+        run: |
+          gh issue edit ${{ steps.find-issue.outputs.number }} --add-label "in-progress"
+          gh issue comment ${{ steps.find-issue.outputs.number }} --body "Starting implementation for this issue."
+          echo "marked=true" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
+
       - name: Create feature branch
-        if: steps.find-issue.outputs.found == 'true'
         run: |
           git checkout -b feature/issue-${{ steps.find-issue.outputs.number }}
 
       - name: Configure Git
-        if: steps.find-issue.outputs.found == 'true'
         run: |
           git config user.name "AI Coder"
           git config user.email "coder@opencode-runner.local"
 
       - name: Install OpenCode
-        if: steps.find-issue.outputs.found == 'true'
         run: curl -fsSL https://opencode.ai/install | bash
 
       - name: Add OpenCode to PATH
-        if: steps.find-issue.outputs.found == 'true'
         run: echo "$HOME/.opencode/bin" >> $GITHUB_PATH
 
       - name: Run Coder Agent
-        if: steps.find-issue.outputs.found == 'true'
+        id: code
+        timeout-minutes: 10
         working-directory: ./project
         run: |
           PROMPT=$(cat ../.github/agent-prompts/coder.md | \
             sed "s/{{ issue_number }}/${{ steps.find-issue.outputs.number }}/g" | \
             sed "s/{{ issue_title }}/${{ steps.issue.outputs.title }}/g")
-          opencode run "$PROMPT" --model "tencent-coding-plan/glm-5"
+          opencode run "$PROMPT" --model "tencent-coding-plan/glm-5" 2>&1 | tee /tmp/coder-output.txt || echo "code_failed=true" >> $GITHUB_OUTPUT
         env:
           TENCENT_CODING_PLAN_API_KEY: ${{ secrets.TENCENT_CODING_PLAN_API_KEY }}
 
       - name: Validate changes in project/ only
-        if: steps.find-issue.outputs.found == 'true'
+        id: validate
         run: |
+          CHANGED_FILES=$(git diff --name-only HEAD -- project/)
+          if [[ -z "$CHANGED_FILES" ]]; then
+            echo "::warning::No changes made in project/"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
           for file in $(git diff --name-only HEAD); do
             if [[ ! "$file" =~ ^project/ ]]; then
               echo "::error::Violation: $file is outside project/"
               git checkout .
+              echo "valid=false" >> $GITHUB_OUTPUT
               exit 1
             fi
           done
+          echo "valid=true" >> $GITHUB_OUTPUT
+          echo "has_changes=true" >> $GITHUB_OUTPUT
 
       - name: Commit and push
-        if: steps.find-issue.outputs.found == 'true'
+        id: commit
+        if: steps.validate.outputs.valid == 'true' && steps.validate.outputs.has_changes == 'true'
         run: |
           git add project/
           git commit -m "feat: implement issue #${{ steps.find-issue.outputs.number }} - ${{ steps.issue.outputs.title }}" || echo "No changes to commit"
           git push origin feature/issue-${{ steps.find-issue.outputs.number }} || echo "Nothing to push"
+          echo "committed=true" >> $GITHUB_OUTPUT
 
       - name: Create PR
-        if: steps.find-issue.outputs.found == 'true'
+        id: create-pr
+        if: steps.commit.outputs.committed == 'true'
         run: |
-          gh pr create \
+          PR_URL=$(gh pr create \
             --title "Implement: ${{ steps.issue.outputs.title }}" \
-            --body "Closes #${{ steps.find-issue.outputs.number }}" \
-            --label "needs-review" || echo "PR may already exist"
+            --body "Closes #${{ steps.find-issue.outputs.number }}
+
+## Implementation
+This PR implements the solution for issue #${{ steps.find-issue.outputs.number }}.
+
+## Changes
+- Files changed: $(git diff --name-only HEAD~1 -- project/ | wc -l)
+- Lines added: $(git diff HEAD~1 --stat -- project/ | tail -1 | grep -oE '[0-9]+ insertion' | grep -oE '[0-9]+' || echo '0')
+- Lines removed: $(git diff HEAD~1 --stat -- project/ | tail -1 | grep -oE '[0-9]+ deletion' | grep -oE '[0-9]+' || echo '0')
+
+## Testing
+Please review the implementation and test coverage." \
+            --label "needs-review" --json url 2>/dev/null || echo "")
+          
+          if [[ -n "$PR_URL" ]]; then
+            PR_NUM=$(echo "$PR_URL" | jq -r '.url' | grep -oE '[0-9]+')
+            echo "pr_number=$PR_NUM" >> $GITHUB_OUTPUT
+            echo "pr_url=$(echo "$PR_URL" | jq -r '.url')" >> $GITHUB_OUTPUT
+            echo "created=true" >> $GITHUB_OUTPUT
+          else
+            echo "created=false" >> $GITHUB_OUTPUT
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Update issue after PR created
+        if: steps.create-pr.outputs.created == 'true'
+        run: |
+          gh issue edit ${{ steps.find-issue.outputs.number }} --remove-label "in-progress"
+          gh issue comment ${{ steps.find-issue.outputs.number }} --body "PR #${{ steps.create-pr.outputs.pr_number }} ready for review: ${{ steps.create-pr.outputs.pr_url }}"
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+      - name: Handle failure - remove in-progress
+        if: steps.mark-progress.outputs.marked == 'true' && steps.create-pr.outputs.created != 'true'
+        run: |
+          gh issue edit ${{ steps.find-issue.outputs.number }} --remove-label "in-progress"
+          gh issue comment ${{ steps.find-issue.outputs.number }} --body "Implementation failed or no changes made. Issue is available for re-assignment."
         env:
           GH_TOKEN: ${{ github.token }}
