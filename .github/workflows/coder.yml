@@ -48,6 +48,8 @@ jobs:
               echo "::notice::No approved issues to work on"
             fi
           fi
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Exit if no issue
         if: steps.find-issue.outputs.found != 'true'
@@ -62,6 +64,8 @@ jobs:
           echo "body<<EOF" >> $GITHUB_OUTPUT
           echo "$DATA" | jq -r '.body' >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Create feature branch
         if: steps.find-issue.outputs.found == 'true'
@@ -118,3 +122,5 @@ jobs:
             --title "Implement: ${{ steps.issue.outputs.title }}" \
             --body "Closes #${{ steps.find-issue.outputs.number }}" \
             --label "needs-review" || echo "PR may already exist"
+        env:
+          GH_TOKEN: ${{ github.token }}
